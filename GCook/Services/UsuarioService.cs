@@ -115,8 +115,55 @@ public class UsuarioService : IUsuarioService
     public async Task<List<string>> RegistrarUsuario(RegistroVM registro)
     {
         var user = Activator.CreateInstance<IdentityUser>();
+
+        await _userStore.SetUserNameAsync(user, registro.Email, CancellationToken.None);
+        await _emailStore.SetEmailAsync(user, registro.Email, CancellationToken.None);
+        var result = await _userManager.CreateAsync(user, registro.Senha);
+
+        if (result.Succeeded)
+        {
+            _logger.LogInformation($"Novo usuário registrado com o email {user.Email}.");
+
+            var userId = await _userManager.GetUserIdAsync(user);
+            var code = await _userManager.GenerateEmailConfirmationTokenAsync(user);
+            code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+            var url = $"http://5143/Account/ConfirmarEmail?userId={userId}&code={code}";
+
+            await _userManager.AddToRoleAsync(user, "Usuário");
+
+            await _emailSender.SendEmailAsync(registro.Email, "GCook - Criação da conta", GetConfirmEmailHtml(HtmlEncoder.Default.Encode(url)));
+
+            //Cria a conta pessoal do usuário
+            Usuario usuario = new()
+            {
+                UsuarioId = userId,
+                DataNascimento = registro.DataNascimento ?? DateTime.Now,
+                Nome = registro.Nome
+            };
+            if (registro.Foto != null)
+            {
+                string fileName = userId + Path.GetExtension(registro.Foto.FileName);
+                string uploads = Path.Combine(_hostEnvironment.WebRootPath, @"img\usuarios");
+                string newFile = Path.Combine(uploads, fileName);
+                using (var stream = new FileStream(newFile, FileMode.Create))
+                {
+                    registro.Foto.CopyTo(stream);
+                }
+                usuario.Foto = @"\img\usuarios" + fileName;
+            }
+            _contexto.Add(usuario);
+            await _contexto.SaveChangesAsync();
+
+            return null;
+        }
+
+        List<string> errors = new();
+        foreach (var error in result.Errors)
+        {
+            errors.Add(TranslateIdentityErrors.TranslateErrorMessage(error.Code));
+        }
+        return errors;
     }
-}
 
 
     private string GetConfirmEmailHtml(string url)
@@ -381,3 +428,5 @@ public class UsuarioService : IUsuarioService
     }
 
 
+
+}

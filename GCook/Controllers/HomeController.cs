@@ -20,18 +20,29 @@ public class HomeController : Controller
 
     public IActionResult Index()
     {
-        HomeVM home = new() {
+        HomeVM home = new(){
             Categorias = _context.Categorias
-            .Where(c => c.ExibirHome)
-            .AsNoTracking()
-            .ToList(),
+                .Where(c => c.ExibirHome)
+                .AsNoTracking()
+                .ToList(),
             Receitas = _context.Receitas
-            .Include(r => r.Categoria)
-            .Include(r => r.Ingredientes)
-            .AsNoTracking()
-            .ToList()
+                .Include(r => r.Categoria)
+                .Include(r => r.Ingredientes)
+                .AsNoTracking()
+                .ToList()
         };
         return View(home);
+    }
+
+    public IActionResult Receita(int id)
+    {
+        Receita receita = _context.Receitas
+            .Include(r => r.Categoria)
+            .Include(r => r.Ingredientes)
+            .ThenInclude(i => i.Ingrediente)
+            .AsNoTracking()
+            .FirstOrDefault(r => r.Id == id);
+        return View(receita);
     }
 
     public IActionResult Privacy()
